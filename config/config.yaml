@@ -1,0 +1,29 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Home AI — User settings
+#  Binary / model paths are managed automatically under ~/.home_ai/
+#  Edit this file to change behaviour; copy to ~/.home_ai/config.yaml to
+#  persist across app updates.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── STT ──────────────────────────────────────────────────────────────────────
+stt:
+  language: en
+  record_seconds: 5          # max mic recording duration before STT runs
+
+# ── LLM (Ollama) ─────────────────────────────────────────────────────────────
+llm:
+  base_url: http://localhost:11434
+  model: llama3.2:3b
+  system_prompt: |
+    You are Agent, a friendly and concise home assistant.
+    Reply in plain spoken sentences — no markdown, no bullet lists.
+    Keep answers short and helpful.
+  max_tokens: 256
+  temperature: 0.7
+
+# ── Audio I/O ─────────────────────────────────────────────────────────────────
+audio:
+  input_device: ""           # empty = system default (Linux: see arecord -l)
+  output_device: ""          # empty = system default
+  sample_rate: 16000
+  channels: 1

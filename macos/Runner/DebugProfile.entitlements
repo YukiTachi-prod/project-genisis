@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sandbox disabled: we spawn whisper-cli, piper, rec, afplay subprocesses
+	     and write to ~/.home_ai/ — none of which are possible inside the sandbox.
+	     This is fine for a local-only desktop app distributed outside the App Store. -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+
+	<!-- Microphone — required for voice input via sox `rec` -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+
+	<!-- Outbound network — required to reach Ollama on localhost:11434 -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- JIT — Flutter debug mode needs this -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+</dict>
+</plist>

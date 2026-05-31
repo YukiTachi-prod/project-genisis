@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sandbox disabled: subprocess spawning (whisper-cli, piper, sox, afplay)
+	     and writing to ~/.home_ai/ are incompatible with the macOS sandbox.
+	     Suitable for direct distribution (.dmg / .zip), not App Store. -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+
+	<!-- Microphone access for voice input -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+
+	<!-- Outbound network for Ollama on localhost:11434 -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>

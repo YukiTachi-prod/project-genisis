@@ -1,0 +1,40 @@
+name: home_ai
+description: "Locally-run Home AI — whisper.cpp STT · Ollama LLM · Piper TTS"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  provider: ^6.1.2
+
+  # HTTP client — for Ollama REST API
+  http: ^1.4.0
+
+  # YAML config loader
+  yaml: ^3.1.2
+
+  # Lightweight path helpers
+  path: ^1.9.0
+
+  # Markdown renderer for AI replies (optional but nice)
+  flutter_markdown: ^0.7.6
+
+  # Nice icons
+  cupertino_icons: ^1.0.8
+  wakelock_plus: ^1.6.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - config/config.yaml
