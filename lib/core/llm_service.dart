@@ -109,4 +109,22 @@ class LlmService {
     _history.add(ChatMessage(role: 'assistant', content: reply));
     return reply;
   }
+
+  /// Unloads the model from Ollama's memory immediately.
+  Future<void> unloadModel({String? modelName}) async {
+    try {
+      final targetModel = modelName ?? config.llmModel;
+      final body = jsonEncode({
+        'model': targetModel,
+        'keep_alive': 0,
+      });
+      await http
+          .post(
+            Uri.parse('${config.llmBaseUrl}/api/generate'),
+            headers: {'Content-Type': 'application/json'},
+            body: body,
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {}
+  }
 }

@@ -61,6 +61,12 @@ class AudioService {
   /// Interrupt an in-progress recording early (push-to-talk release).
   void stopRecording() => _recordProcess?.kill(ProcessSignal.sigint);
 
+  /// Cleanup and kill recording process.
+  void dispose() {
+    _recordProcess?.kill();
+    _recordProcess = null;
+  }
+
   /// Plays a WAV file and waits for completion.
   Future<void> playWav(String wavPath) async {
     late ProcessResult result;

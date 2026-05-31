@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'app_config.dart';
 import 'paths.dart';
@@ -5,10 +6,12 @@ import 'paths.dart';
 /// Speech-to-Text via whisper.cpp (whisper-cli subprocess).
 class SttService {
   final AppConfig config;
+  final List<Process> _activeProcesses = [];
+
   SttService(this.config);
 
   Future<String> transcribe(String wavPath) async {
-    final result = await Process.run(
+    final process = await Process.start(
       AppPaths.whisperBin,
       [
         '--model',    AppPaths.whisperModel,
@@ -21,12 +24,32 @@ class SttService {
         'LD_LIBRARY_PATH': AppPaths.whisperDir,
       },
     );
+    _activeProcesses.add(process);
 
-    if (result.exitCode != 0) {
-      throw Exception(
-          'whisper-cli failed (${result.exitCode}): ${result.stderr}');
+    final stdoutBuf = StringBuffer();
+    final stderrBuf = StringBuffer();
+
+    process.stdout.transform(utf8.decoder).listen((data) => stdoutBuf.write(data));
+    process.stderr.transform(utf8.decoder).listen((data) => stderrBuf.write(data));
+
+    try {
+      final exitCode = await process.exitCode;
+      if (exitCode != 0) {
+        throw Exception(
+            'whisper-cli failed ($exitCode): $stderrBuf');
+      }
+      return stdoutBuf.toString().trim();
+    } finally {
+      _activeProcesses.remove(process);
     }
+  }
 
-    return (result.stdout as String).trim();
+  void dispose() {
+    for (final proc in _activeProcesses) {
+      try {
+        proc.kill();
+      } catch (_) {}
+    }
+    _activeProcesses.clear();
   }
 }

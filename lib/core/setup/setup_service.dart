@@ -19,6 +19,23 @@ const _piperVoiceBase =
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SetupService {
+  static final List<Process> _activeProcesses = [];
+
+  static void terminateActiveProcesses() {
+    for (final proc in _activeProcesses) {
+      try {
+        final pid = proc.pid;
+        proc.kill();
+        if (Platform.isLinux || Platform.isMacOS) {
+          Process.runSync('pkill', ['-P', '$pid']);
+        } else if (Platform.isWindows) {
+          Process.runSync('taskkill', ['/F', '/T', '/PID', '$pid']);
+        }
+      } catch (_) {}
+    }
+    _activeProcesses.clear();
+  }
+
   /// Returns true when every required file already exists under ~/.home_ai/
   static bool isComplete() {
     return File(AppPaths.whisperBin).existsSync() &&
@@ -335,26 +352,31 @@ class SetupService {
     yield SetupEvent.stepProgress(stepId, null); // indeterminate while running
 
     final proc = await Process.start(exe, args);
+    _activeProcesses.add(proc);
 
-    final combined = StreamController<SetupEvent>();
-    var pending = 2;
-    void done() {
-      if (--pending == 0) combined.close();
+    try {
+      final combined = StreamController<SetupEvent>();
+      var pending = 2;
+      void done() {
+        if (--pending == 0) combined.close();
+      }
+
+      proc.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((l) => combined.add(SetupEvent.log(stepId, l)), onDone: done);
+      proc.stderr
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((l) => combined.add(SetupEvent.log(stepId, l)), onDone: done);
+
+      yield* combined.stream;
+
+      final code = await proc.exitCode;
+      if (code != 0) throw Exception('$exe exited with code $code');
+    } finally {
+      _activeProcesses.remove(proc);
     }
-
-    proc.stdout
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .listen((l) => combined.add(SetupEvent.log(stepId, l)), onDone: done);
-    proc.stderr
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .listen((l) => combined.add(SetupEvent.log(stepId, l)), onDone: done);
-
-    yield* combined.stream;
-
-    final code = await proc.exitCode;
-    if (code != 0) throw Exception('$exe exited with code $code');
   }
 
   /// Download a file, yielding determinate [SetupEvent.stepProgress] events

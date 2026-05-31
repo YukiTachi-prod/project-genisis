@@ -6,6 +6,7 @@ import 'paths.dart';
 /// Piper reads text from stdin and writes a WAV to --output_file.
 class TtsService {
   final AppConfig config;
+  final List<Process> _activeProcesses = [];
   TtsService(this.config);
 
   Future<String> synthesize(String text) async {
@@ -33,18 +34,32 @@ class TtsService {
               '${AppPaths.piperDir}:${Platform.environment['DYLD_LIBRARY_PATH'] ?? ''}',
       },
     );
+    _activeProcesses.add(process);
 
-    process.stdin.write(_sanitize(text));
-    await process.stdin.close();
+    try {
+      process.stdin.write(_sanitize(text));
+      await process.stdin.close();
 
-    final exitCode = await process.exitCode;
-    if (exitCode != 0) {
-      final err =
-          await process.stderr.transform(const SystemEncoding().decoder).join();
-      throw Exception('piper failed ($exitCode): $err');
+      final exitCode = await process.exitCode;
+      if (exitCode != 0) {
+        final err =
+            await process.stderr.transform(const SystemEncoding().decoder).join();
+        throw Exception('piper failed ($exitCode): $err');
+      }
+
+      return outPath;
+    } finally {
+      _activeProcesses.remove(process);
     }
+  }
 
-    return outPath;
+  void dispose() {
+    for (final proc in _activeProcesses) {
+      try {
+        proc.kill();
+      } catch (_) {}
+    }
+    _activeProcesses.clear();
   }
 
   /// Strips symbols so Piper only speaks words and numbers.

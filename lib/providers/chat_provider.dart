@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'dart:ui';
+import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../core/app_config.dart';
@@ -10,6 +11,7 @@ import '../core/llm_service.dart';
 import '../core/tts_service.dart';
 import '../core/paths.dart';
 import '../models/chat_message.dart';
+import '../core/setup/setup_service.dart';
 
 class VoiceOption {
   final String name;
@@ -144,11 +146,20 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  AppLifecycleListener? _lifecycleListener;
+
   ChatProvider(this.config) {
     _audio = AudioService(config);
     _stt   = SttService(config);
     _llm   = LlmService(config);
     _tts   = TtsService(config);
+
+    _lifecycleListener = AppLifecycleListener(
+      onExitRequested: () async {
+        await cleanUpOnExit();
+        return AppExitResponse.exit;
+      },
+    );
   }
 
   /// Called by GlowScreen to warm up the LLM without touching AiState.
@@ -402,6 +413,7 @@ class ChatProvider extends ChangeNotifier {
       case '/exit':
         _addMessage(MessageRole.system, 'Shutting down Home AI...');
         await Future.delayed(const Duration(milliseconds: 300));
+        await cleanUpOnExit();
         exit(0);
       default:
         _addMessage(MessageRole.system, 'Unknown command: $cmd. Type /help for assistance.', isError: true);
@@ -641,6 +653,12 @@ class ChatProvider extends ChangeNotifier {
       }
 
       // 3. Save to config & update
+      final oldModel = config.llmModel;
+      if (oldModel != model.id) {
+        addDownloadLog('[INF] Unloading old model ($oldModel) from Ollama memory...');
+        await _llm.unloadModel(modelName: oldModel);
+      }
+
       addDownloadLog('[INF] Saving model selection...');
       await AppConfig.saveLlmModel(model.id);
 
@@ -863,8 +881,37 @@ class ChatProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _terminalProcess?.kill();
+    _lifecycleListener?.dispose();
+    _killProcessTree(_terminalProcess);
+    _audio.dispose();
+    _stt.dispose();
+    _tts.dispose();
     super.dispose();
+  }
+
+  /// Cleans up resources, kills subprocesses, and unloads LLM model on app exit.
+  Future<void> cleanUpOnExit() async {
+    try {
+      await _llm.unloadModel();
+    } catch (_) {}
+    _killProcessTree(_terminalProcess);
+    _audio.dispose();
+    _stt.dispose();
+    _tts.dispose();
+    SetupService.terminateActiveProcesses();
+  }
+
+  void _killProcessTree(Process? process) {
+    if (process == null) return;
+    try {
+      final pid = process.pid;
+      process.kill();
+      if (Platform.isLinux || Platform.isMacOS) {
+        Process.runSync('pkill', ['-P', '$pid']);
+      } else if (Platform.isWindows) {
+        Process.runSync('taskkill', ['/F', '/T', '/PID', '$pid']);
+      }
+    } catch (_) {}
   }
 
   String _parseAndExecuteTerminalCommand(String reply) {
