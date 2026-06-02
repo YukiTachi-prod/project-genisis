@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:html/parser.dart' as html_parser;
+import 'package:html/dom.dart' as dom;
 import '../core/app_config.dart';
 import '../core/audio_service.dart';
 import '../core/stt_service.dart';
@@ -93,6 +95,24 @@ const List<ModelOption> availableModels = [
   ),
 ];
 
+class SearchResultItem {
+  final String title;
+  final String url;
+  final String snippet;
+
+  SearchResultItem({
+    required this.title,
+    required this.url,
+    required this.snippet,
+  });
+}
+
+enum BrowserPageMode {
+  home,
+  search,
+  page,
+}
+
 enum AiState {
   idle,
   priming,
@@ -119,6 +139,34 @@ class ChatProvider extends ChangeNotifier {
   bool _primingWarmUpDone = false;
 
   bool get isPrimingWarmUpDone => _primingWarmUpDone;
+
+  // Browser state fields
+  bool _isBrowserOpen = false;
+  bool get isBrowserOpen => _isBrowserOpen;
+
+  String _browserUrl = '';
+  String get browserUrl => _browserUrl;
+
+  String _browserTitle = 'Browser';
+  String get browserTitle => _browserTitle;
+
+  bool _browserLoading = false;
+  bool get browserLoading => _browserLoading;
+
+  String? _browserError;
+  String? get browserError => _browserError;
+
+  BrowserPageMode _browserPageMode = BrowserPageMode.home;
+  BrowserPageMode get browserPageMode => _browserPageMode;
+
+  List<SearchResultItem> _browserSearchResults = [];
+  List<SearchResultItem> get browserSearchResults => List.unmodifiable(_browserSearchResults);
+
+  String _browserPageMarkdown = '';
+  String get browserPageMarkdown => _browserPageMarkdown;
+
+  final List<String> _browserHistory = [];
+  final List<String> _browserForwardHistory = [];
 
   bool _isTerminalOpen = false;
   bool get isTerminalOpen => _isTerminalOpen;
@@ -251,7 +299,7 @@ class ChatProvider extends ChangeNotifier {
         await _audio.playWav(ttsPath);
       }
     } catch (e) {
-      _addMessage(MessageRole.assistant, '⚠️ Error: $e', isError: true);
+      _addMessage(MessageRole.assistant, 'Error: $e', isError: true);
     } finally {
       _setState(AiState.idle, 'Ready');
       _cleanup(wavPath);
@@ -290,7 +338,7 @@ class ChatProvider extends ChangeNotifier {
         await _audio.playWav(ttsPath);
       }
     } catch (e) {
-      _addMessage(MessageRole.assistant, '⚠️ Error: $e', isError: true);
+      _addMessage(MessageRole.assistant, 'Error: $e', isError: true);
     } finally {
       _setState(AiState.idle, 'Ready');
       _cleanup(ttsPath);
@@ -319,6 +367,8 @@ class ChatProvider extends ChangeNotifier {
           '  /fullscreen            - Switch to fullscreen mode\n'
           '  /windowed              - Switch to windowed mode\n'
           '  /terminal (or /term)   - Toggle the embedded live terminal panel\n'
+          '  /browser (or /web)     - Toggle the embedded web browser panel\n'
+          '  /search [query]        - Search query in the embedded browser\n'
           '  /mic (or /record)      - Trigger voice recording (runs for ${config.recordSeconds}s)\n'
           '  /status                - Show connection and model status\n'
           '  /exit                  - Shutdown the application'
@@ -371,6 +421,30 @@ class ChatProvider extends ChangeNotifier {
           _addMessage(MessageRole.system, 'Updating personality...');
           await updatePersonality(args);
           _addMessage(MessageRole.system, 'Personality successfully updated.');
+        }
+        break;
+      case '/browser':
+      case '/web':
+        if (args.isEmpty) {
+          toggleBrowser();
+          _addMessage(MessageRole.system, _isBrowserOpen ? 'Opened browser panel.' : 'Closed browser panel.');
+        } else {
+          if (!_isBrowserOpen) {
+            toggleBrowser();
+          }
+          navigateBrowser(args);
+          _addMessage(MessageRole.system, 'Loading page: $args');
+        }
+        break;
+      case '/search':
+        if (args.isEmpty) {
+          _addMessage(MessageRole.system, 'Usage: /search <query>', isError: true);
+        } else {
+          if (!_isBrowserOpen) {
+            toggleBrowser();
+          }
+          navigateBrowser(args);
+          _addMessage(MessageRole.system, 'Searching for: $args');
         }
         break;
       case '/mic':
@@ -474,7 +548,7 @@ class ChatProvider extends ChangeNotifier {
 
     final formattedRam = ramGB.toStringAsFixed(1);
     final specMsg = 
-        ' 🖥️ System Spec Scan:\n'
+        ' System Spec Scan:\n'
         '  Detected System RAM: $formattedRam GB\n'
         '  Recommended LLM:     $recommendation\n'
         '  Current LLM Model:   ${config.llmModel}\n'
@@ -579,7 +653,7 @@ class ChatProvider extends ChangeNotifier {
       _addMessage(MessageRole.system, 'Voice changed to ${voice.name}.');
     } catch (e) {
       addDownloadLog('[ ERR ] Failed to download voice: $e');
-      _addMessage(MessageRole.system, '⚠️ Failed to change voice: $e', isError: true);
+      _addMessage(MessageRole.system, 'Failed to change voice: $e', isError: true);
     } finally {
       _primingWarmUpDone = true;
       notifyListeners();
@@ -671,7 +745,7 @@ class ChatProvider extends ChangeNotifier {
       _addMessage(MessageRole.system, 'LLM model changed to ${model.name}.');
     } catch (e) {
       addDownloadLog('[ ERR ] Failed to change model: $e');
-      _addMessage(MessageRole.system, '⚠️ Failed to change model: $e', isError: true);
+      _addMessage(MessageRole.system, 'Failed to change model: $e', isError: true);
     } finally {
       _primingWarmUpDone = true;
       notifyListeners();
@@ -682,7 +756,7 @@ class ChatProvider extends ChangeNotifier {
     try {
       await _windowChannel.invokeMethod('fullscreen');
     } catch (e) {
-      _addMessage(MessageRole.system, '⚠️ Failed to enter fullscreen: $e', isError: true);
+      _addMessage(MessageRole.system, 'Failed to enter fullscreen: $e', isError: true);
     }
   }
 
@@ -690,7 +764,7 @@ class ChatProvider extends ChangeNotifier {
     try {
       await _windowChannel.invokeMethod('windowed');
     } catch (e) {
-      _addMessage(MessageRole.system, '⚠️ Failed to exit fullscreen: $e', isError: true);
+      _addMessage(MessageRole.system, 'Failed to exit fullscreen: $e', isError: true);
     }
   }
 
@@ -723,7 +797,7 @@ class ChatProvider extends ChangeNotifier {
         _announceCommandFinished(code);
       });
     } catch (e) {
-      _appendTerminalOutput('⚠️ Failed to start shell process: $e\n');
+      _appendTerminalOutput('Failed to start shell process: $e\n');
     }
   }
 
@@ -835,7 +909,7 @@ class ChatProvider extends ChangeNotifier {
         _cleanup(ttsPath);
       }
     } catch (e) {
-      _addMessage(MessageRole.assistant, '⚠️ Error analyzing command output: $e', isError: true);
+      _addMessage(MessageRole.assistant, 'Error analyzing command output: $e', isError: true);
     } finally {
       _setState(AiState.idle, 'Ready');
     }
@@ -947,6 +1021,33 @@ class ChatProvider extends ChangeNotifier {
       }
       actionTriggered = true;
       actionMsg = 'Certainly, closing the terminal.';
+    } else if (reply.contains('[BROWSER:')) {
+      final start = reply.indexOf('[BROWSER:') + '[BROWSER:'.length;
+      final end = reply.indexOf(']', start);
+      if (end != -1) {
+        final dest = reply.substring(start, end).trim();
+        parsedReply = reply.replaceRange(reply.indexOf('[BROWSER:'), end + 1, '').trim();
+        if (!_isBrowserOpen) {
+          toggleBrowser();
+        }
+        navigateBrowser(dest);
+        actionTriggered = true;
+        actionMsg = 'Opening browser to: $dest';
+      }
+    } else if (reply.contains('[OPEN_BROWSER]')) {
+      parsedReply = reply.replaceAll('[OPEN_BROWSER]', '').trim();
+      if (!_isBrowserOpen) {
+        toggleBrowser();
+      }
+      actionTriggered = true;
+      actionMsg = 'Certainly, opening the browser.';
+    } else if (reply.contains('[CLOSE_BROWSER]')) {
+      parsedReply = reply.replaceAll('[CLOSE_BROWSER]', '').trim();
+      if (_isBrowserOpen) {
+        toggleBrowser();
+      }
+      actionTriggered = true;
+      actionMsg = 'Certainly, closing the browser.';
     }
 
     if (actionTriggered && parsedReply.isEmpty) {
@@ -954,6 +1055,261 @@ class ChatProvider extends ChangeNotifier {
     }
 
     return parsedReply;
+  }
+
+  // ── Browser Logic ─────────────────────────────────────────────────────────
+
+  void toggleBrowser() {
+    _isBrowserOpen = !_isBrowserOpen;
+    if (_isBrowserOpen && _browserHistory.isEmpty) {
+      browserGoHome();
+    }
+    notifyListeners();
+  }
+
+  void navigateBrowser(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return;
+
+    _browserError = null;
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      _loadBrowserUrl(trimmed);
+    } else if (!trimmed.contains(' ') && trimmed.contains('.') && trimmed.indexOf('.') > 0 && trimmed.indexOf('.') < trimmed.length - 1) {
+      _loadBrowserUrl('https://$trimmed');
+    } else {
+      _searchBrowser(trimmed);
+    }
+  }
+
+  Future<void> _searchBrowser(String query) async {
+    _browserLoading = true;
+    _browserTitle = 'Search: $query';
+    _browserUrl = query;
+    _browserPageMode = BrowserPageMode.search;
+    _browserSearchResults = [];
+    _browserError = null;
+    notifyListeners();
+
+    _addToBrowserHistory('search:$query');
+
+    try {
+      final uri = Uri.parse('https://html.duckduckgo.com/html/?q=${Uri.encodeQueryComponent(query)}');
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      }).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final document = html_parser.parse(response.body);
+        final resultElements = document.getElementsByClassName('result');
+        final List<SearchResultItem> results = [];
+        
+        for (final element in resultElements) {
+          final titleElement = element.querySelector('.result__title .result__a');
+          final snippetElement = element.querySelector('.result__snippet');
+
+          if (titleElement != null) {
+            final title = titleElement.text.trim();
+            String rawUrl = titleElement.attributes['href'] ?? '';
+            
+            String url = rawUrl;
+            if (rawUrl.contains('uddg=')) {
+              final uriMatch = Uri.parse(rawUrl);
+              final uddgParam = uriMatch.queryParameters['uddg'];
+              if (uddgParam != null) {
+                url = Uri.decodeFull(uddgParam);
+              }
+            }
+
+            final snippet = snippetElement?.text.trim() ?? '';
+            results.add(SearchResultItem(title: title, url: url, snippet: snippet));
+          }
+        }
+        
+        _browserSearchResults = results;
+        if (results.isEmpty) {
+          _browserError = 'No results found. Please try another query.';
+        }
+      } else {
+        _browserError = 'Failed to fetch search results (HTTP ${response.statusCode})';
+      }
+    } catch (e) {
+      _browserError = 'Error: $e';
+    } finally {
+      _browserLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadBrowserUrl(String url) async {
+    _browserLoading = true;
+    _browserUrl = url;
+    _browserTitle = 'Loading $url...';
+    _browserPageMode = BrowserPageMode.page;
+    _browserPageMarkdown = '';
+    _browserError = null;
+    notifyListeners();
+
+    _addToBrowserHistory(url);
+
+    try {
+      final response = await http.get(Uri.parse(url), headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      }).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final document = html_parser.parse(response.body);
+        _browserTitle = document.querySelector('title')?.text.trim() ?? url;
+        
+        dom.Element? mainElement = document.querySelector('article') ?? 
+                                    document.querySelector('main') ?? 
+                                    document.querySelector('[role="main"]') ??
+                                    document.body;
+                                    
+        if (mainElement != null) {
+          _browserPageMarkdown = _convertHtmlToMarkdown(mainElement);
+        } else {
+          _browserPageMarkdown = 'No readable body content found.';
+        }
+      } else {
+        _browserError = 'Failed to load webpage (HTTP ${response.statusCode})';
+      }
+    } catch (e) {
+      _browserError = 'Error: $e';
+    } finally {
+      _browserLoading = false;
+      notifyListeners();
+    }
+  }
+
+  String _convertHtmlToMarkdown(dom.Element root) {
+    final buffer = StringBuffer();
+
+    void traverse(dom.Node node) {
+      if (node is dom.Element) {
+        final tagName = node.localName;
+        if (tagName == 'script' || 
+            tagName == 'style' || 
+            tagName == 'noscript' || 
+            tagName == 'iframe' || 
+            tagName == 'nav' || 
+            tagName == 'footer' || 
+            tagName == 'header' ||
+            tagName == 'form' ||
+            tagName == 'button' ||
+            tagName == 'input' ||
+            tagName == 'select') {
+          return;
+        }
+        
+        if (tagName == 'h1') {
+          buffer.write('\n\n# ');
+        } else if (tagName == 'h2') {
+          buffer.write('\n\n## ');
+        } else if (tagName == 'h3') {
+          buffer.write('\n\n### ');
+        } else if (tagName == 'h4') {
+          buffer.write('\n\n#### ');
+        } else if (tagName == 'p') {
+          buffer.write('\n\n');
+        } else if (tagName == 'br') {
+          buffer.write('\n');
+        } else if (tagName == 'li') {
+          buffer.write('\n* ');
+        } else if (tagName == 'strong' || tagName == 'b') {
+          buffer.write(' **');
+        } else if (tagName == 'em' || tagName == 'i') {
+          buffer.write(' *');
+        } else if (tagName == 'code') {
+          buffer.write(' `');
+        } else if (tagName == 'pre') {
+          buffer.write('\n```\n');
+        } else if (tagName == 'a') {
+          buffer.write(' [');
+        } else if (tagName == 'img') {
+          final src = node.attributes['src'] ?? '';
+          final alt = node.attributes['alt'] ?? 'image';
+          buffer.write(' ![$alt]($src) ');
+        }
+
+        for (final child in node.nodes) {
+          traverse(child);
+        }
+
+        if (tagName == 'strong' || tagName == 'b') {
+          buffer.write('** ');
+        } else if (tagName == 'em' || tagName == 'i') {
+          buffer.write('* ');
+        } else if (tagName == 'code') {
+          buffer.write('` ');
+        } else if (tagName == 'pre') {
+          buffer.write('\n```\n');
+        } else if (tagName == 'a') {
+          final href = node.attributes['href'] ?? '';
+          buffer.write(']($href) ');
+        }
+      } else if (node is dom.Text) {
+        final text = node.text.trim();
+        if (text.isNotEmpty) {
+          buffer.write(text);
+        }
+      }
+    }
+
+    for (final child in root.nodes) {
+      traverse(child);
+    }
+
+    return buffer.toString().replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+  }
+
+  void _addToBrowserHistory(String destination) {
+    if (_browserHistory.isNotEmpty && _browserHistory.last == destination) {
+      return;
+    }
+    _browserHistory.add(destination);
+    _browserForwardHistory.clear();
+  }
+
+  void browserGoBack() {
+    if (_browserHistory.length < 2) return;
+    final current = _browserHistory.removeLast();
+    _browserForwardHistory.add(current);
+    final previous = _browserHistory.last;
+    
+    _browserHistory.removeLast();
+    _loadFromHistoryItem(previous);
+  }
+
+  void browserGoForward() {
+    if (_browserForwardHistory.isEmpty) return;
+    final next = _browserForwardHistory.removeLast();
+    _loadFromHistoryItem(next);
+  }
+
+  void _loadFromHistoryItem(String item) {
+    _browserError = null;
+    if (item == 'home') {
+      _browserUrl = '';
+      _browserTitle = 'Home';
+      _browserPageMode = BrowserPageMode.home;
+      _addToBrowserHistory('home');
+      notifyListeners();
+    } else if (item.startsWith('search:')) {
+      final query = item.substring('search:'.length);
+      _searchBrowser(query);
+    } else {
+      _loadBrowserUrl(item);
+    }
+  }
+
+  void browserGoHome() {
+    _browserError = null;
+    _browserUrl = '';
+    _browserTitle = 'Home';
+    _browserPageMode = BrowserPageMode.home;
+    _addToBrowserHistory('home');
+    notifyListeners();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

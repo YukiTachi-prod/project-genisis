@@ -126,7 +126,7 @@ class _EmbeddedTerminalWidgetState extends State<EmbeddedTerminalWidget> {
                       style: const TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 12,
-                        color: Color(0xFFD6DBFF),
+                        color: Color(0xFFF5F5FA),
                         height: 1.3,
                       ),
                     ),
@@ -148,7 +148,7 @@ class _EmbeddedTerminalWidgetState extends State<EmbeddedTerminalWidget> {
             child: Row(
               children: [
                 Text(
-                  isPasswordPrompt ? '🔑 ' : '\$ ',
+                  isPasswordPrompt ? '[pwd] ' : '\$ ',
                   style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 13,
@@ -176,7 +176,7 @@ class _EmbeddedTerminalWidgetState extends State<EmbeddedTerminalWidget> {
                       contentPadding: EdgeInsets.zero,
                       isDense: true,
                       hintText: isPasswordPrompt ? 'Enter password...' : null,
-                      hintStyle: isPasswordPrompt ? const TextStyle(color: Color(0xFF6E6E8A)) : null,
+                      hintStyle: isPasswordPrompt ? const TextStyle(color: Color(0xFFAEB2D1)) : null,
                     ),
                   ),
                 ),

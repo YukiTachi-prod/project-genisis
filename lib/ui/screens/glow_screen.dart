@@ -656,7 +656,7 @@ class _TerminalBox extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  color:      Color(0xFF6666AA),
+                  color:      Color(0xFFAEB2D1),
                   fontSize:   11,
                   fontFamily: 'monospace',
                 ),
@@ -693,7 +693,7 @@ class _LogLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color color = const Color(0xFF8888BB);
+    Color color = const Color(0xFFD0D0E5);
     if (text.contains('[ OK'))  color = const Color(0xFF28C840);
     if (text.contains('[ WRN')) color = const Color(0xFFFFBD2E);
     if (text.contains('[ ERR')) color = const Color(0xFFFF5F57);

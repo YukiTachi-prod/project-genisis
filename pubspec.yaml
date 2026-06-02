@@ -29,6 +29,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   wakelock_plus: ^1.6.1
 
+  # Pure Dart HTML parser for embedded browser
+  html: ^0.15.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

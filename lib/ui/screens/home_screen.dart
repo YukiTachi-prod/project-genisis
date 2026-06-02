@@ -6,6 +6,7 @@ import '../../models/chat_message.dart';
 import '../../core/paths.dart';
 import '../widgets/loading_overlay.dart';
 import '../widgets/embedded_terminal.dart';
+import '../widgets/embedded_browser.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -131,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                   fontFamily: 'monospace',
                   fontSize: 11,
-                  color: Color(0xFF6E6E8A),
+                  color: Color(0xFFAEB2D1),
                 ),
               ),
               const SizedBox(height: 16),
@@ -145,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 decoration: InputDecoration(
                   hintText: 'Enter AI personality instructions...',
-                  hintStyle: const TextStyle(color: Color(0xFF3E3E5C)),
+                  hintStyle: const TextStyle(color: Color(0xFF6E6E8A)),
                   filled: true,
                   fillColor: const Color(0xFF06061A),
                   contentPadding: const EdgeInsets.all(12),
@@ -174,7 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontFamily: 'monospace',
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
-                color: Color(0xFF6E6E8A),
+                color: Color(0xFFAEB2D1),
               ),
             ),
           ),
@@ -245,7 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 11,
-                      color: Color(0xFF6E6E8A),
+                      color: Color(0xFFAEB2D1),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -296,7 +297,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   style: TextStyle(
                                     fontFamily: 'monospace',
                                     fontSize: 12,
-                                    color: isActive ? Colors.white : const Color(0xFFD6DBFF),
+                                    color: isActive ? Colors.white : const Color(0xFFF5F5FA),
                                     fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
                                   ),
                                 ),
@@ -330,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   fontFamily: 'monospace',
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
-                  color: Color(0xFF6E6E8A),
+                  color: Color(0xFFAEB2D1),
                 ),
               ),
             ),
@@ -386,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: TextStyle(
                           fontFamily: 'monospace',
                           fontSize: 11,
-                          color: Color(0xFF6E6E8A),
+                          color: Color(0xFFAEB2D1),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -443,7 +444,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           style: TextStyle(
                                             fontFamily: 'monospace',
                                             fontSize: 12,
-                                            color: isActive ? Colors.white : const Color(0xFFD6DBFF),
+                                            color: isActive ? Colors.white : const Color(0xFFF5F5FA),
                                             fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
                                           ),
                                         ),
@@ -453,7 +454,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           style: const TextStyle(
                                             fontFamily: 'monospace',
                                             fontSize: 9,
-                                            color: Color(0xFF8E8EA8),
+                                            color: Color(0xFFC0C0D0),
                                           ),
                                         ),
                                       ],
@@ -488,7 +489,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontFamily: 'monospace',
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
-                      color: Color(0xFF6E6E8A),
+                      color: Color(0xFFAEB2D1),
                     ),
                   ),
                 ),
@@ -540,7 +541,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                      if (chat.isTerminalOpen)
+                      if (chat.isTerminalOpen || chat.isBrowserOpen)
                         Container(
                           width: MediaQuery.of(context).size.width * 0.45,
                           decoration: const BoxDecoration(
@@ -548,7 +549,23 @@ class _HomeScreenState extends State<HomeScreen> {
                               left: BorderSide(color: Color(0xFF1E1E3F), width: 1.0),
                             ),
                           ),
-                          child: EmbeddedTerminalWidget(chat: chat),
+                          child: Column(
+                            children: [
+                              if (chat.isTerminalOpen)
+                                Expanded(
+                                  child: EmbeddedTerminalWidget(chat: chat),
+                                ),
+                              if (chat.isTerminalOpen && chat.isBrowserOpen)
+                                Container(
+                                  height: 1.0,
+                                  color: const Color(0xFF1E1E3F),
+                                ),
+                              if (chat.isBrowserOpen)
+                                Expanded(
+                                  child: EmbeddedBrowserWidget(chat: chat),
+                                ),
+                            ],
+                          ),
                         ),
                     ],
                   ),
@@ -590,6 +607,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildInputRow(BuildContext ctx, ChatProvider chat) {
     final isReady = chat.isIdle;
+    final isRecording = chat.state == AiState.recording;
+    final canTap = isReady || isRecording;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -627,7 +646,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 hintStyle: TextStyle(
                   fontFamily: 'monospace',
                   fontSize: 13,
-                  color: Color(0xFF3E3E5C),
+                  color: Color(0xFF6E6E8A),
                 ),
                 border: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -635,6 +654,64 @@ class _HomeScreenState extends State<HomeScreen> {
                 errorBorder: InputBorder.none,
                 disabledBorder: InputBorder.none,
                 contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Square record button
+          MouseRegion(
+            cursor: canTap ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            child: GestureDetector(
+              onTap: () {
+                if (isRecording) {
+                  chat.stopRecording();
+                } else if (isReady) {
+                  chat.startVoiceTurn();
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isRecording
+                      ? const Color(0xFFFF5F57).withValues(alpha: 0.15)
+                      : isReady
+                          ? const Color(0xFF11113A)
+                          : const Color(0xFF0B0B2E),
+                  border: Border.all(
+                    color: isRecording
+                        ? const Color(0xFFFF5F57)
+                        : isReady
+                            ? const Color(0xFF5B6EF5)
+                            : const Color(0xFF2E2E5D),
+                    width: 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [
+                    if (isRecording)
+                      BoxShadow(
+                        color: const Color(0xFFFF5F57).withValues(alpha: 0.4),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      )
+                    else if (isReady)
+                      BoxShadow(
+                        color: const Color(0xFF5B6EF5).withValues(alpha: 0.25),
+                        blurRadius: 6,
+                        spreadRadius: 0.5,
+                      ),
+                  ],
+                ),
+                child: Icon(
+                  isRecording ? Icons.stop : Icons.mic_none_outlined,
+                  size: 18,
+                  color: isRecording
+                      ? const Color(0xFFFF5F57)
+                      : isReady
+                          ? Colors.white
+                          : const Color(0xFF4C566A),
+                ),
               ),
             ),
           ),
@@ -658,14 +735,14 @@ class TerminalLine extends StatelessWidget {
       color = Colors.white;
       prefix = 'user@home-ai:~\$ ';
     } else if (entry.isAssistant) {
-      color = const Color(0xFFD6DBFF);
+      color = const Color(0xFFF5F5FA);
       prefix = 'agent> ';
     } else {
       if (entry.isError) {
         color = const Color(0xFFFF5F57);
         prefix = '[error] ';
       } else {
-        color = const Color(0xFF6E6E8A);
+        color = const Color(0xFFAEB2D1);
         prefix = '[system] ';
       }
     }
@@ -684,7 +761,7 @@ class TerminalLine extends StatelessWidget {
               color: entry.isUser
                   ? const Color(0xFF5B6EF5)
                   : entry.isAssistant
-                      ? const Color(0xFF8897EC)
+                      ? const Color(0xFFC8D0FF)
                       : color,
             ),
           ),
@@ -761,7 +838,7 @@ class _TerminalStatus extends StatelessWidget {
             style: TextStyle(
               fontFamily: 'monospace',
               fontSize: 10,
-              color: Color(0xFF4C566A),
+              color: Color(0xFFAEB2D1),
             ),
           ),
         ],

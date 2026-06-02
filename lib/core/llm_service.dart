@@ -44,12 +44,16 @@ class LlmService {
         'Terminal Control Instructions:\n'
         '- To open the terminal panel in the UI, append "[OPEN_TERMINAL]" to your message.\n'
         '- To close the terminal panel, append "[CLOSE_TERMINAL]" to your message.\n'
-        '- To run a shell command inside the user\'s terminal (embedded in the UI), append "[RUN_COMMAND: command]" to your message (e.g. "[RUN_COMMAND: ls -la]"). This will automatically open the terminal and execute the command.\n'
+        '- To run a shell command inside the user\'s terminal (embedded in the UI), append "[RUN_COMMAND: command]" to your message (e.g. "[RUN_COMMAND: ls -la]"). This will automatically open the terminal and execute the command.\n\n'
+        'Browser Control Instructions:\n'
+        '- To open the browser panel in the UI, append "[OPEN_BROWSER]" to your message.\n'
+        '- To close the browser panel, append "[CLOSE_BROWSER]" to your message.\n'
+        '- To load a URL or search a query in the browser panel, append "[BROWSER: url_or_query]" to your message (e.g. "[BROWSER: wikipedia.org]" or "[BROWSER: latest technology news]"). This will automatically open the browser panel and load the page/search.\n\n'
         'Rules:\n'
-        '1. Use these tags ONLY when the user explicitly requests you to open/close the terminal or run a command, or when a command is required to fulfill the request. Never use them for greetings (like hello/hi), general chit-chat, or questions.\n'
-        '2. You MUST always write conversational text explaining what you are doing alongside the tag (e.g., "Sure, opening the terminal. [OPEN_TERMINAL]" or "Running directory listing: [RUN_COMMAND: ls]"). Never output the tag alone without text.\n'
-        '3. When executing a command via [RUN_COMMAND: command], you MUST NOT assume, state, or imply that the command has finished, succeeded, or failed in that reply. Instead, only state that you are starting or running the command, and if appropriate, that it might prompt for a password or take time. The system executes commands in the background asynchronously.\n'
-        '4. You will receive updates in the conversation history as system messages when the command requires a password (e.g. "The terminal is prompting for a password") or when it exits (e.g. "The terminal process exited with code X"). Use these events in subsequent turns to know the true status of the command.';
+        '1. Use these tags ONLY when the user explicitly requests you to open/close the terminal/browser, run a command, search for something, or visit a website, or when a command/search is required to fulfill the request. Never use them for greetings, general chit-chat, or questions.\n'
+        '2. You MUST always write conversational text explaining what you are doing alongside the tag (e.g., "Sure, opening the browser. [OPEN_BROWSER]" or "Searching for latest news: [BROWSER: latest news]"). Never output the tag alone without text.\n'
+        '3. When executing a command or search via [RUN_COMMAND: command] or [BROWSER: url_or_query], you MUST NOT assume, state, or imply that the command or search has finished, succeeded, or failed in that reply. Instead, only state that you are starting or running it. The system executes them in the background asynchronously.\n'
+        '4. You will receive updates in the conversation history as system messages when commands or processes exit. Use these events in subsequent turns to know the true status.';
   }
 
   /// Warms up the model by sending a minimal request so Ollama loads the model

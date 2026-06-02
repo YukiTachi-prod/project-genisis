@@ -30,7 +30,7 @@ class StatusBar extends StatelessWidget {
           const SizedBox(width: 8),
           Text(text,
               style: theme.textTheme.labelMedium
-                  ?.copyWith(color: cs.onSurfaceVariant)),
+                  ?.copyWith(color: const Color(0xFFAEB2D1))),
         ],
       ),
     );
